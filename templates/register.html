@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}药品登记 · 化学药品使用统计系统{% endblock %}
+{% block page %}register{% endblock %}
+
+{% block content %}
+<section class="card">
+  <!-- 系统为空时提示先导入或手动入库建档 -->
+  <div class="empty-guide hidden" id="emptyGuide">
+    系统中还没有药品。可先到「实时库存」页
+    <a href="/inventory">下载 Excel 模板批量导入入库</a>；
+    也可直接在下方选择「入库登记」逐个建立药品档案。
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="manual">手动登记</button>
+    <button class="tab" data-tab="ai">AI 辅助登记</button>
+  </div>
+
+  <!-- 偏好设置 -->
+  <div class="pref">
+    <span class="pref-label">药品列表显示方式：</span>
+    <label class="radio-chip">
+      <input type="radio" name="pickerMode" value="browse"> 排序浏览
+    </label>
+    <label class="radio-chip">
+      <input type="radio" name="pickerMode" value="search"> 搜索输入
+    </label>
+  </div>
+
+  <!-- ========== 手动登记 ========== -->
+  <div class="tab-panel active" id="panel-manual">
+    <form id="manualForm">
+      <div class="type-switch">
+        <label class="type-option type-in">
+          <input type="radio" name="changeType" value="in">
+          <span>入库登记</span>
+        </label>
+        <label class="type-option type-use">
+          <input type="radio" name="changeType" value="use" checked>
+          <span>使用登记</span>
+        </label>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>药品</label>
+          <!-- 排序浏览模式 -->
+          <select id="manualDrugSelect" class="input"></select>
+          <!-- 搜索输入模式 -->
+          <input type="text" id="manualDrugInput" class="input hidden"
+                 list="drugDataList" placeholder="输入药品名称关键字搜索"
+                 autocomplete="off">
+          <datalist id="drugDataList"></datalist>
+        </div>
+
+        <div class="field field-quantity">
+          <label>数量</label>
+          <div class="quantity-row">
+            <input type="number" id="manualQty" class="input" min="0"
+                   step="any" placeholder="0" required>
+            <span class="unit-tag" id="manualUnit">—</span>
+          </div>
+        </div>
+
+        <div class="field field-newunit hidden" id="manualNewUnitField">
+          <label>新药品单位</label>
+          <select id="manualNewUnit" class="input">
+            <option value="克">克</option>
+            <option value="毫克">毫克</option>
+            <option value="毫升">毫升</option>
+            <option value="升">升</option>
+            <option value="瓶">瓶</option>
+            <option value="个">个</option>
+            <option value="盒">盒</option>
+            <option value="包">包</option>
+          </select>
+        </div>
+
+        <div class="field field-note">
+          <label>备注（可选）</label>
+          <input type="text" id="manualNote" class="input"
+                 placeholder="例如：初三(2)班分组实验" maxlength="100">
+        </div>
+      </div>
+
+      <div class="stock-hint" id="manualStockHint">请选择药品以查看当前剩余量</div>
+
+      <button type="submit" class="btn btn-primary btn-block" id="manualSubmit">
+        确认登记
+      </button>
+    </form>
+  </div>
+
+  <!-- ========== AI 辅助登记 ========== -->
+  <div class="tab-panel" id="panel-ai">
+    <div class="ai-input-row">
+      <textarea id="aiText" class="input" rows="3"
+                placeholder="一句话可以包含多条信息，例如：做实验用了 5 克氯化钠和 10 毫升盐酸；或 新到无水乙醇 500 毫升、氯化钠 200 克"></textarea>
+      <button type="button" class="btn btn-primary" id="aiParseBtn">AI 解析</button>
+    </div>
+    <p class="ai-tip">一句话可包含多种药品的入库/使用信息，AI 会自动拆成多条；解析最多自动重试 3 次。</p>
+
+    <!-- 预登记确认区（可能有多条） -->
+    <div id="aiPreview" class="ai-preview hidden">
+      <h3 id="aiPreviewTitle">解析结果，请逐条核对后可直接修改</h3>
+
+      <!-- 仅在存在问题字段时显示的阻断提示 -->
+      <div class="block-banner hidden" id="aiBlockBanner">
+        展开的条目中标红字段存在问题，<strong>必须全部修改正确后才能登记</strong>；
+        如不需要某条数据，可点击该条末尾的 × 删除。
+      </div>
+
+      <div id="aiItems" class="ai-items"></div>
+
+      <div class="ai-actions">
+        <button type="button" class="btn btn-primary" id="aiSubmit">
+          确认全部登记（<span id="aiValidCount">0</span> 条）
+        </button>
+        <button type="button" class="btn btn-danger-ghost" id="aiClearBtn">清空结果</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.write('<script src="' + base_url + '/static/register.js?v=20260912e"><\/script>');
+</script>
+{% endblock %}

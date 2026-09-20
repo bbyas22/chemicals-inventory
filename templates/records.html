@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}登记记录 · 化学药品使用统计系统{% endblock %}
+{% block page %}records{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <h2>库存登记记录</h2>
+    <button class="btn btn-ghost" id="refreshRecords">刷新</button>
+  </div>
+
+  <div class="rec-toolbar">
+    <div class="rec-filters">
+      <label class="rec-date">日期
+        <input type="date" class="input rec-date-input" id="recStart">
+      </label>
+      <span class="rec-date-sep">至</span>
+      <input type="date" class="input rec-date-input" id="recEnd">
+      <button class="btn btn-ghost" id="recQuery">按日期查询</button>
+      <button class="btn btn-ghost" id="recWeek">最近 7 天</button>
+    </div>
+    <button class="btn btn-ghost" id="recShowAll">查看全部记录</button>
+  </div>
+  <div class="rec-meta" id="recMeta"></div>
+
+  <div class="table-wrap">
+    <table class="table" id="recordTable">
+      <thead>
+        <tr>
+          <th>登记时间</th>
+          <th class="col-name">药品</th>
+          <th>类型</th>
+          <th>数量</th>
+          <th>操作人</th>
+          <th>备注</th>
+          <th class="col-act" title="仅管理员可见">撤销</th>
+        </tr>
+      </thead>
+      <tbody id="recordBody">
+        <tr><td colspan="7" class="empty">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rec-more-wrap">
+    <button class="btn btn-ghost hidden" id="recLoadMore">加载更多（每次 50 条）</button>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.write('<script src="' + base_url + '/static/records.js?v=20260919a"><\/script>');
+</script>
+{% endblock %}

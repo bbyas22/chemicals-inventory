@@ -1,0 +1,26 @@
+# ===== 敏感配置（含真实 API Key / 密码，禁止提交）=====
+config.py
+
+# ===== 运行数据 =====
+chemicals.db
+chemicals.db-wal
+chemicals.db-shm
+*.log
+nohup.out
+
+# ===== 本地打包产物（压缩包内含真实 config.py）=====
+*.zip
+
+# ===== 本机专用工具（含本地路径，不适合公开）=====
+reset_and_restart.py
+重置数据库并重启.bat
+
+# ===== Python / 编辑器缓存 =====
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

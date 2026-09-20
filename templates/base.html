@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}化学药品使用统计系统{% endblock %}</title>
+  <script>
+    /* 部署前缀自动探测：取地址栏路径第一段，若不是应用自身的顶层路由
+       （register/inventory/records/api/static），则视为反向代理前缀
+       （如 /lab、/chemicals 等任意路径），所有请求路径统一拼接 base_url。
+       直连访问（无前缀）→ 前缀为空，后端零配置、零重定向。 */
+    const base_url = (function () {
+      var p = (window.location.pathname || "").replace(/\/+$/, "");
+      var segs = p.split("/").filter(Boolean);
+      if (segs.length === 0) return "";
+      var APP_SEGMENTS = { register: 1, inventory: 1, records: 1, api: 1, static: 1 };
+      return APP_SEGMENTS[segs[0]] ? "" : "/" + segs[0];
+    })();
+    document.write('<link rel="stylesheet" href="' + base_url + '/static/style.css?v=20260919a">');
+  </script>
+</head>
+<body data-page="{% block page %}{% endblock %}">
+  <header class="topbar">
+    <h1>化学药品使用统计系统</h1>
+    <p class="subtitle">入库 / 使用登记 · 实时库存 · AI 辅助登记</p>
+  </header>
+
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="/register" data-nav="register">登记</a>
+      <a href="/inventory" data-nav="inventory">实时库存</a>
+      <a href="/records" data-nav="records">登记记录</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script>
+    /* common.js 里会把页面内根绝对链接统一改写为 base_url + 路径 */
+    document.write('<script src="' + base_url + '/static/common.js?v=20260912e"><\/script>');
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

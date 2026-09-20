@@ -1,0 +1,9 @@
+# 文本文件换行规范：仓库内统一 LF，避免 bash 脚本在 Linux 下因 CRLF 报错
+* text=auto
+*.sh  text eol=lf
+*.py  text eol=lf
+*.js  text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md  text eol=lf
+*.bat text eol=crlf

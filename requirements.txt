@@ -1,0 +1,6 @@
+# 化学药品使用统计系统依赖
+# 安装：pip install -r requirements.txt
+
+flask>=3.0
+openpyxl>=3.1
+openai>=1.30

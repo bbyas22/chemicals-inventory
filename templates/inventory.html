@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}实时库存 · 化学药品使用统计系统{% endblock %}
+{% block page %}inventory{% endblock %}
+
+{% block content %}
+<!-- Excel 批量入库导入（任何时候都可用；默认折叠，点标题展开） -->
+<section class="card import-card" id="importCard">
+  <details id="importDetails">
+    <summary class="import-title">
+      <span class="import-title-text">Excel 批量导入入库</span>
+      <span class="import-toggle">点击展开 / 收起</span>
+    </summary>
+    <div class="import-body">
+      <ol class="import-steps">
+        <li>点击「下载 Excel 模板」，在表格中逐行填写每种药品的
+          <strong>药品名称、单位、入库量</strong>，例如：氯化钠 / 克 / 500；</li>
+        <li>可选填写<strong>低库存提醒</strong>：剩余低于该数值时库存标红并排到最前面；
+          留空时克、毫升默认按 500 提醒，其他单位不提醒；</li>
+        <li>保存文件后，在下方选择该 .xlsx 文件并点击「开始导入」。</li>
+      </ol>
+      <div class="import-actions">
+        <a class="btn btn-primary" href="/api/import/template">下载 Excel 模板</a>
+        <input type="file" id="importFile" accept=".xlsx" class="input import-file">
+        <button type="button" class="btn btn-primary" id="importBtn" disabled>开始导入</button>
+      </div>
+      <p class="import-note">
+        任何时候都可以导入：库中没有的药品会自动建档，已有的药品会追加一笔入库（单位需一致）；
+        已存在药品再次导入时，本行填了提醒值就更新、留空则保持不变。
+        填写有误的行会被逐行标出、整批取消导入，修改后重新上传即可。
+        少量登记也可直接到
+        <a href="/register">登记页</a>操作。
+      </p>
+      <div class="import-result hidden" id="importResult"></div>
+    </div>
+  </details>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <h2>实时库存</h2>
+    <input type="search" id="stockSearch" class="input input-search"
+           placeholder="搜索药品名称…">
+  </div>
+  <div class="table-wrap">
+    <table class="table" id="stockTable">
+      <thead>
+        <tr>
+          <th class="col-name">药品名称</th>
+          <th>单位</th>
+          <th>当前剩余量</th>
+          <th class="col-act" title="设置低库存提醒阈值">⚙</th>
+        </tr>
+      </thead>
+      <tbody id="stockBody">
+        <tr><td colspan="4" class="empty">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.write('<script src="' + base_url + '/static/inventory.js?v=20260912e"><\/script>');
+</script>
+{% endblock %}
