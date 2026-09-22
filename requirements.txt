@@ -1,4 +1,4 @@
-# 化学药品使用统计系统依赖
+# 药品使用统计系统（化学 / 物理双空间）依赖
 # 安装：pip install -r requirements.txt
 
 flask>=3.0

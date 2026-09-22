@@ -8,6 +8,9 @@
   --in-bg: #dcfce7;
   --use-color: #dc2626;
   --use-bg: #fee2e2;
+  /* “消耗”是正常业务动作用蓝色（红色只留给错误/低库存）；物理空间覆盖为紫色 */
+  --use-accent: #2563eb;
+  --use-accent-bg: #eff6ff;
   --text: #1f2937;
   --muted: #6b7280;
   --border: #e5e7eb;
@@ -28,9 +31,30 @@ body {
   color: #fff;
   padding: 22px 16px;
   text-align: center;
+  position: relative;
 }
 .topbar h1 { font-size: 22px; font-weight: 700; }
 .subtitle { margin-top: 4px; font-size: 13px; opacity: .9; }
+/* 退出登录：固定在顶栏右上角（common.js 负责：仅清除登录条目并回到登记页） */
+.logout-btn {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  padding: 5px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .5);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.logout-btn:hover { background: rgba(255, 255, 255, .32); }
+.logout-btn:active { transform: translateY(-50%) scale(.96); }
+/* 手机窄屏显示短文案"退出"，桌面显示"退出登录"（避免与居中标题拥挤） */
+.logout-mini { display: none; }
 
 .container {
   max-width: 860px;
@@ -680,6 +704,11 @@ select.input { cursor: pointer; }
   .ai-input-row { flex-direction: column; }
   .input-search { max-width: none; }
   .nav-inner a { padding: 12px 14px; font-size: 14px; }
+  /* 顶栏：标题缩小、退出按钮紧凑（文字缩为"退出"），避免与居中标题拥挤 */
+  .topbar h1 { font-size: 19px; }
+  .logout-btn { right: 10px; padding: 4px 10px; font-size: 12px; }
+  .logout-full { display: none; }
+  .logout-mini { display: inline; }
 }
 
 /* 窄屏手机：分段按钮缩为单字，隐藏正常条目的剩余量小字 */
@@ -690,4 +719,42 @@ select.input { cursor: pointer; }
   .ai-item .js-qty { flex-basis: 58px; width: 58px; }
   .ai-item .js-unit { flex-basis: 48px; width: 48px; }
   .ai-stock-brief { display: none; }
+  /* 更窄：标题与退出按钮再缩一档 */
+  .topbar h1 { font-size: 17px; }
+  .logout-btn { padding: 3px 8px; }
+}
+
+/* ============================================================
+   物理实验室主题（紫色系）
+   <html data-lab="physics"> 由 head 内联脚本 / common.js 按首次登记
+   的空间在 localStorage（chem_user_lab）中读取并设置；
+   化学空间为默认蓝色主题。语义色保持不变：入库绿、错误/低库存红、警告橙。
+   ============================================================ */
+html[data-lab="physics"] {
+  --primary: #7c3aed;
+  --primary-dark: #6d28d9;
+  --use-accent: #7c3aed;
+  --use-accent-bg: #f3e8ff;
+}
+html[data-lab="physics"] .topbar {
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+}
+html[data-lab="physics"] .input:focus {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .15);
+}
+html[data-lab="physics"] .stock-hint {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+html[data-lab="physics"] .icon-btn:hover {
+  background: #f3e8ff;
+  color: var(--primary);
+}
+html[data-lab="physics"] .empty-guide {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+  color: #5b21b6;
+}
+html[data-lab="physics"] .import-card {
+  border-color: #ddd6fe;
 }

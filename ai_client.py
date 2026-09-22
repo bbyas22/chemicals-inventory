@@ -93,11 +93,12 @@ def strip_punctuation(text: str) -> str:
     return re.sub(r"\s+", " ", "".join(kept)).strip()
 
 
-def _build_messages(text: str, drug_names: list) -> list:
-    """构造对话消息：system 设定解析规则，user 传入原始描述"""
+def _build_messages(text: str, drug_names: list, lab_word: str = "化学") -> list:
+    """构造对话消息：system 设定解析规则，user 传入原始描述。
+    lab_word 为实验室空间中文名（化学 / 物理），仅用于提示词身份描述。"""
     names_line = "、".join(drug_names) if drug_names else "（暂无，请按原文提取）"
     system_prompt = (
-        "你是化学实验室药品登记助手。用户会用一句自然语言描述药品登记情况，"
+        f"你是{lab_word}实验室药品登记助手。用户会用一句自然语言描述药品登记情况，"
         "一句话中可能同时包含【多种药品】以及【多条入库或使用信息】，"
         "你需要把它们逐条拆分成结构化数据，一种药品的一次操作对应一条记录。\n\n"
         f"药品库中现有药品名称：{names_line}\n"
@@ -210,13 +211,14 @@ def _normalize_items(data) -> list:
     return items
 
 
-def parse_chemical_text(text: str, drug_names: list) -> dict:
+def parse_chemical_text(text: str, drug_names: list, lab_word: str = "化学") -> dict:
     """
     将自然语言描述解析为结构化登记数据。
 
     参数：
         text: 用户输入的自然语言，例如“今天做实验用了 5 克氯化钠”
         drug_names: 当前药品库中的药品名称列表，用于名称对齐
+        lab_word: 实验室空间中文名（化学 / 物理），用于 AI 身份提示词
 
     返回：
         list[dict]: 每条为 {change_type, drug_name, quantity, unit, note}，
@@ -227,7 +229,10 @@ def parse_chemical_text(text: str, drug_names: list) -> dict:
         AICallError:  连续 MAX_PARSE_ATTEMPTS 次无法解析，或接口/认证类错误
     """
     if not API_KEY:
-        raise AIConfigError("未检测到环境变量 SILICONFLOW_API_KEY，AI 辅助登记不可用")
+        raise AIConfigError(
+            "未配置硅基流动 API Key，AI 辅助登记不可用"
+            "（请在 config.py 填写，或设置环境变量 SILICONFLOW_API_KEY）"
+        )
 
     text = (text or "").strip()
     if not text:
@@ -239,7 +244,7 @@ def parse_chemical_text(text: str, drug_names: list) -> dict:
         raise AICallError("请输入药品使用描述")
 
     client = get_client()
-    messages = _build_messages(text, drug_names)
+    messages = _build_messages(text, drug_names, lab_word)
     _debug(f"开始解析：输入 = 「{text}」")
     _debug(f"药品库参考 {len(drug_names)} 个名称，system prompt {len(messages[0]['content'])} 字符")
     last_error = None

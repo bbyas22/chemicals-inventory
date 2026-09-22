@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-化学药品使用统计 Web 应用
+药品使用统计 Web 应用（化学 / 物理双空间，按首次登记密码进入对应空间，
+各自使用独立的数据库文件，数据完全隔离）
 =========================
 
 后端：Python Flask + SQLite（标准库 sqlite3，轻量、免安装）
@@ -27,10 +28,41 @@ from openpyxl.styles import Font
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from ai_client import AICallError, AIConfigError, parse_chemical_text
-from config import PORT, SILICONFLOW_API_KEY, USER_PASSWORD, ADMIN_PASSWORD
+from config import (
+    PORT, SILICONFLOW_API_KEY,
+    USER_PASSWORD, ADMIN_PASSWORD,
+    PHYSICS_USER_PASSWORD, PHYSICS_ADMIN_PASSWORD,
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "chemicals.db")
+
+# ============================================================
+# 实验室空间：用首次登记密码区分。化学 / 物理共用一套代码与服务，
+# 但各自使用独立的数据库文件，数据完全隔离。
+# 前端每个请求通过 X-Lab 请求头（或 ?lab= / JSON 内 lab 字段）告知空间。
+# ============================================================
+LABS = ("chem", "physics")
+LAB_DB_FILES = {
+    "chem": "chemicals.db",
+    "physics": "physics.db",
+}
+# 各空间的中文显示名（页面标题、AI 提示词、Excel 模板名等使用）
+LAB_WORD = {
+    "chem": "化学",
+    "physics": "物理",
+}
+
+
+def current_lab() -> str:
+    """获取本次请求所属实验室空间，缺省（旧版前端/未登录）按化学空间处理"""
+    lab = (request.headers.get("X-Lab") or "").strip().lower()
+    if not lab:
+        lab = (request.args.get("lab") or "").strip().lower()
+    if not lab:
+        body = request.get_json(silent=True)
+        if isinstance(body, dict):
+            lab = str(body.get("lab") or "").strip().lower()
+    return lab if lab in LABS else "chem"
 
 app = Flask(__name__)
 
@@ -84,19 +116,27 @@ MAX_IMPORT_ROWS = 1000
 # ============================================================
 
 def get_db() -> sqlite3.Connection:
-    """获取本次请求复用的数据库连接"""
-    if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
-    return g.db
+    """获取本次请求复用的数据库连接（按请求所属实验室空间选择对应库文件）"""
+    lab = current_lab()
+    dbs = g.get("_lab_dbs")
+    if dbs is None:
+        dbs = {}
+        g._lab_dbs = dbs
+    if lab not in dbs:
+        conn = sqlite3.connect(os.path.join(BASE_DIR, LAB_DB_FILES[lab]))
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        ensure_schema(conn)
+        dbs[lab] = conn
+    return dbs[lab]
 
 
 @app.teardown_appcontext
 def close_db(_exc):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
+    dbs = g.pop("_lab_dbs", None)
+    if dbs:
+        for conn in dbs.values():
+            conn.close()
 
 
 def now_minute() -> str:
@@ -104,10 +144,12 @@ def now_minute() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def init_db():
-    """建表（仅在数据库文件不存在时创建）；首次使用为空，等待 Excel 导入或手动建档"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA foreign_keys = ON")
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    """在给定连接上建表并执行旧库迁移（化学/物理两个库结构完全一致）。
+
+    SQLite 的 DDL 支持事务内的 IF NOT EXISTS 判断，但 ALTER TABLE 不能，
+    因此迁移列用 PRAGMA 查询后按需追加，保证可重复调用。
+    """
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS drugs (
@@ -151,7 +193,15 @@ def init_db():
     if "revoked_by" not in rcols:
         conn.execute("ALTER TABLE records ADD COLUMN revoked_by TEXT NOT NULL DEFAULT ''")
     conn.commit()
-    conn.close()
+
+
+def init_db() -> None:
+    """启动时确保化学 / 物理两个空间的数据库都已按当前结构建好"""
+    for db_file in LAB_DB_FILES.values():
+        conn = sqlite3.connect(os.path.join(BASE_DIR, db_file))
+        conn.execute("PRAGMA foreign_keys = ON")
+        ensure_schema(conn)
+        conn.close()
 
 
 def default_threshold(unit):
@@ -391,20 +441,27 @@ def api_user_verify():
         return jsonify({"error": "请填写真实姓名"}), 400
     if len(name) > 20:
         return jsonify({"error": "姓名不能超过 20 个字"}), 400
+    # 四组密码决定“实验室空间 + 角色”：
+    # 输入化学实验室的密码进化学空间，输入物理实验室的密码进物理空间，
+    # 两个空间使用各自独立的数据库。管理员密码大小写不敏感。
     if password == USER_PASSWORD:
-        role = "user"
+        role, lab = "user", "chem"
     elif password.upper() == ADMIN_PASSWORD:
-        role = "admin"
+        role, lab = "admin", "chem"
+    elif password == PHYSICS_USER_PASSWORD:
+        role, lab = "user", "physics"
+    elif password.upper() == PHYSICS_ADMIN_PASSWORD:
+        role, lab = "admin", "physics"
     else:
-        return jsonify({"error": "管理密码错误，请重新输入"}), 401
-    return jsonify({"ok": True, "name": name, "role": role})
+        return jsonify({"error": "密码错误，请重新输入"}), 401
+    return jsonify({"ok": True, "name": name, "role": role, "lab": lab})
 
 
 # ============================================================
 # API：Excel 批量入库导入（任何时候都可用）
 # ============================================================
 
-def _build_template_workbook() -> bytes:
+def _build_template_workbook(lab_word: str = "化学") -> bytes:
     """生成 Excel 批量入库导入模板：一个填写表 + 一个填写说明表"""
     wb = Workbook()
     ws = wb.active
@@ -422,7 +479,7 @@ def _build_template_workbook() -> bytes:
 
     guide = wb.create_sheet("填写说明")
     tips = [
-        "化学药品 Excel 入库导入模板 — 填写说明",
+        f"{lab_word}药品 Excel 入库导入模板 — 填写说明",
         "",
         "1. 请在「药品入库导入」工作表中从第 2 行开始逐行填写，每行一种药品。",
         "2. 各列含义：",
@@ -452,12 +509,13 @@ def _build_template_workbook() -> bytes:
 
 @app.get("/api/import/template")
 def api_download_template():
-    """下载 Excel 导入模板（.xlsx）"""
-    data = _build_template_workbook()
+    """下载 Excel 导入模板（.xlsx）；文件名按实验室空间区分"""
+    lab_word = LAB_WORD[current_lab()]
+    data = _build_template_workbook(lab_word)
     return send_file(
         io.BytesIO(data),
         as_attachment=True,
-        download_name="化学药品入库导入模板.xlsx",
+        download_name=f"{lab_word}药品入库导入模板.xlsx",
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
@@ -830,7 +888,7 @@ def api_ai_parse():
     names = [d["name"] for d in drugs]
 
     try:
-        parsed_items = parse_chemical_text(text, names)
+        parsed_items = parse_chemical_text(text, names, LAB_WORD[current_lab()])
     except AIConfigError as exc:
         return jsonify({"error": str(exc), "code": "NO_API_KEY"}), 503
     except AICallError as exc:
@@ -1012,14 +1070,24 @@ if __name__ == "__main__":
     init_db()
     # 端口统一在 config.py 配置（也可用环境变量 PORT 覆盖）；
     # 默认仅监听本机 127.0.0.1（生产环境由 nginx 反代转发，无需直接对外监听）
-    print(" * 化学药品使用统计系统已启动")
+    print(" * 药品使用统计系统已启动（化学 / 物理双空间，数据库相互隔离）")
     print(" * 本机访问：  http://127.0.0.1:%d/" % PORT)
     print(" * AI 接口 Key：" + ("已配置（AI 辅助登记可用）" if SILICONFLOW_API_KEY else "未配置（AI 辅助登记不可用，可在 config.py 填写）"))
-    if not USER_PASSWORD or not ADMIN_PASSWORD:
-        print(" * 警告：普通用户密码或管理员密码为空，任何人都可能完成首次登记，"
-              "请复制 config.example.py 为 config.py 并填写密码")
-    if USER_PASSWORD.upper() == ADMIN_PASSWORD:
-        print(" * 警告：普通用户密码与管理员密码相同，将没有人能获得管理员身份，请在 config.py 修改")
+    # 密码自检：任一为空、或四个密码之间有重复，都会导致对应空间无法正常登记
+    _pwd_pairs = [
+        ("化学-普通用户", USER_PASSWORD), ("化学-管理员", ADMIN_PASSWORD),
+        ("物理-普通用户", PHYSICS_USER_PASSWORD), ("物理-管理员", PHYSICS_ADMIN_PASSWORD),
+    ]
+    for _label, _pwd in _pwd_pairs:
+        if not _pwd:
+            print(f" * 警告：{_label}密码为空，任何人都可能完成首次登记，请在 config.py 填写")
+    _seen = {}
+    for _label, _pwd in _pwd_pairs:
+        _key = _pwd.upper()
+        if _key and _key in _seen:
+            print(f" * 警告：{_label}密码与{_seen[_key]}密码相同，输入该密码只会进入前者，请在 config.py 修改")
+        else:
+            _seen[_key] = _label
 
     # 仅监听本机回环地址；关闭重载器避免 Windows 下产生孤儿进程
     app.run(host="127.0.0.1", port=PORT, debug=True, use_reloader=False)

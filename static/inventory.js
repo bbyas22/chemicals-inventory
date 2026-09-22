@@ -159,7 +159,12 @@ async function submitImport() {
   btn.textContent = "导入中…";
   try {
     var _pre = (typeof base_url === "string") ? base_url : "";
-    var resp = await fetch(_pre + "/api/import/excel", { method: "POST", body: form });
+    // FormData 请求不手动设 Content-Type（浏览器自动带 boundary），仅带空间标识
+    var resp = await fetch(_pre + "/api/import/excel", {
+      method: "POST",
+      body: form,
+      headers: { "X-Lab": currentLab() }
+    });
     var data = await resp.json().catch(function () { return {}; });
     if (!resp.ok) {
       renderImportErrors(data);

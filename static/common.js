@@ -47,12 +47,46 @@ function formatQty(n) {
 // 页面内所有请求路径统一用 base_url + "/..." 拼接。
 // ------------------------------------------------------------
 
+// ------------------------------------------------------------
+// 实验室空间：化学 chem / 物理 physics
+// 首次登记时由输入的密码决定（服务端返回 lab），存 localStorage；
+// 两个空间共用一套页面，但请求各自独立的数据库、显示各自的名称与配色。
+// ------------------------------------------------------------
+var LAB_KEY = "chem_user_lab";
+var LAB_META = {
+  chem: { word: "化学", title: "化学药品使用统计系统" },
+  physics: { word: "物理", title: "物理药品使用统计系统" }
+};
+
+function currentLab() {
+  return localStorage.getItem(LAB_KEY) === "physics" ? "physics" : "chem";
+}
+function currentLabMeta() {
+  return LAB_META[currentLab()];
+}
+
+// 首绘前应用空间品牌：<html data-lab>（驱动 CSS 主题）+ 页面大标题 + 浏览器标题
+(function applyLabBranding() {
+  var lab = currentLab();
+  document.documentElement.setAttribute("data-lab", lab);
+  var h1 = document.getElementById("appTitle");
+  if (h1) h1.textContent = LAB_META[lab].title;
+  if (lab === "physics" && document.title.indexOf("化学") !== -1) {
+    document.title = document.title.replace(/化学/g, "物理");
+  }
+})();
+
 // 页面内根绝对链接（/register、/api/... 等）统一改写为 base_url 前缀
 (function rewriteLinks() {
   var pre = (typeof base_url === "string") ? base_url : "";
-  if (!pre) return;
+  var lab = currentLab();
   document.querySelectorAll('a[href^="/"]').forEach(function (a) {
-    a.setAttribute("href", pre + a.getAttribute("href"));
+    var href = a.getAttribute("href");
+    // 模板下载是普通 GET 链接（不能带自定义请求头），用 query 传递空间
+    if (href.indexOf("/api/import/template") !== -1) {
+      href += (href.indexOf("?") === -1 ? "?" : "&") + "lab=" + lab;
+    }
+    a.setAttribute("href", pre + href);
   });
 })();
 function escapeHtml(s) {
@@ -73,10 +107,13 @@ async function api(url, options) {
   // 所有请求路径统一拼接部署前缀 base_url（head 内联脚本探测）
   var pre = (typeof base_url === "string") ? base_url : "";
   if (url.charAt(0) !== "/") url = "/" + url;
-  var resp = await fetch(pre + url, Object.assign(
-    { headers: { "Content-Type": "application/json" } },
-    options || {}
-  ));
+  // 每个请求携带实验室空间标识，后端据此选择化学/物理各自的数据库
+  var opts = Object.assign({ headers: {} }, options || {});
+  opts.headers = Object.assign(
+    { "Content-Type": "application/json", "X-Lab": currentLab() },
+    (options && options.headers) || {}
+  );
+  var resp = await fetch(pre + url, opts);
   var data = await resp.json().catch(function () { return {}; });
   if (!resp.ok) throw new Error(data.error || ("请求失败（" + resp.status + "）"));
   return data;
@@ -155,17 +192,26 @@ function initUserGate() {
     var btn = $("#gateSubmit");
     btn.disabled = true;
     try {
+      var previousLab = currentLab();
       var data = await api("/api/user/verify", {
         method: "POST",
         body: JSON.stringify({ name: name, password: password }),
       });
+      var lab = data.lab || "chem";
       localStorage.setItem(OPERATOR_KEY, name);
       localStorage.setItem(ROLE_KEY, data.role || "user");
+      localStorage.setItem(LAB_KEY, lab);
+      // 密码对应的实验室空间与当前页面不同（如首次输入的是物理实验室密码）：
+      // 整页重载，让标题、主题配色、全部数据按新空间重新初始化
+      if (lab !== previousLab) {
+        location.reload();
+        return;
+      }
       gate.remove();
+      var meta = LAB_META[lab] || LAB_META.chem;
       toast(
-        data.role === "admin"
-          ? "登记成功，欢迎管理员 " + name
-          : "登记成功，欢迎 " + name,
+        "登记成功，欢迎" + (data.role === "admin" ? "管理员 " : " ") + name +
+        "（" + meta.word + "实验室）",
         "success"
       );
     } catch (err) {
@@ -179,3 +225,21 @@ function initUserGate() {
 }
 
 initUserGate();
+
+// ------------------------------------------------------------
+// 退出登录（顶栏右上角按钮）：按条目精确清除本地的登录记录
+//   chem_user_name（操作人）/ chem_user_role（角色）/ chem_user_lab（实验室空间）
+// 不清空整个 localStorage，保留 chem_picker_mode 等界面偏好，
+// 然后回到登记页重新登记（输入哪个实验室的密码就进入哪个空间）
+// ------------------------------------------------------------
+(function initLogout() {
+  var btn = document.getElementById("logoutBtn");
+  if (!btn) return;
+  btn.addEventListener("click", function () {
+    [OPERATOR_KEY, ROLE_KEY, LAB_KEY].forEach(function (k) {
+      localStorage.removeItem(k);
+    });
+    var pre = (typeof base_url === "string") ? base_url : "";
+    location.href = pre + "/register";
+  });
+})();
